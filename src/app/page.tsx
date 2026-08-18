@@ -541,6 +541,15 @@ function Conversation({
     });
     if (response.ok) setState(await response.json());
   }
+  async function editLastMessage(messageToEdit: Message) {
+    if (isSending) return;
+    const response = await fetch(`/api/chat?${query}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageId: messageToEdit.id }) });
+    const result = await response.json();
+    if (!response.ok) { setSendStatus(result.error ?? "메시지를 수정하지 못했습니다."); return; }
+    setState(result as StoryState);
+    setMessage(messageToEdit.content);
+    setSendStatus("메시지를 수정한 뒤 종이비행기 버튼으로 다시 보내세요.");
+  }
 
   if (!state) return <main className="loading">대화를 불러오는 중...</main>;
   return (
@@ -613,16 +622,20 @@ function Conversation({
               )}
             </p>
           </article>
-          {state.messages.map((item) => (
+          {state.messages.map((item) => {
+            const isLatestUserMessage = item.role === "user" && !state.messages.slice(state.messages.indexOf(item) + 1).some((message) => message.role === "user");
+            const canEdit = isLatestUserMessage && !isSending;
+            return (
             <article className={`message ${item.role}`} key={item.id}>
-              <p className="speaker">
+              <div className="message-heading"><p className="speaker">
                 {item.role === "user"
                   ? selection.playerCharacter.name
                   : state.settings.characterName}
-              </p>
+              </p>{canEdit && <button className="edit-message-button" aria-label="직전 메시지 수정" title="직전 메시지 수정" onClick={(event) => { event.stopPropagation(); void editLastMessage(item); }}><i className="fa-solid fa-pen" aria-hidden="true" /></button>}</div>
               <p>{renderStoryText(item.content)}</p>
             </article>
-          ))}
+            );
+          })}
           {isSending && (
             <div className="reply-spinner" role="status" aria-label="응답 생성 중">
               <span />
@@ -636,12 +649,6 @@ function Conversation({
               placeholder={`${selection.playerCharacter.name}의 말이나 행동을 적어 보세요... (/사건, /시간흐름)`}
               value={message}
               onChange={(event) => setMessage(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  event.currentTarget.form?.requestSubmit();
-                }
-              }}
             />{sendStatus && <p className="send-status" role="status">{sendStatus}</p>}</div>
           <button className="send-button" disabled={isSending} aria-label="메시지 보내기" title="메시지 보내기"><i className="fa-solid fa-paper-plane" aria-hidden="true" /></button>
         </form>
