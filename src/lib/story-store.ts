@@ -1,9 +1,11 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
-import type { CharacterProfile, CollectionSummary, PlayerCharacter, SceneStatus, StoredConversation, StoryCollection, StoryState } from "@/lib/types";
+import type { AppSettings, CharacterProfile, CollectionSummary, PlayerCharacter, SceneStatus, StoredConversation, StoryCollection, StoryState } from "@/lib/types";
 
 const dataDirectory = path.join(process.cwd(), "data");
 const dataFile = path.join(dataDirectory, "story-collections.json");
+const settingsFile = path.join(dataDirectory, "app-settings.json");
+const defaultAppSettings: AppSettings = { geminiModel: process.env.GEMINI_MODEL ?? "gemini-3.5-flash" };
 
 const initialSceneStatus: SceneStatus = {
   date: "알 수 없음",
@@ -72,6 +74,19 @@ async function getCollections(): Promise<StoryCollection[]> {
 async function saveCollections(collections: StoryCollection[]) {
   await mkdir(dataDirectory, { recursive: true });
   await writeFile(dataFile, JSON.stringify(collections, null, 2), "utf8");
+}
+
+export async function getAppSettings(): Promise<AppSettings> {
+  try {
+    return { ...defaultAppSettings, ...(JSON.parse(await readFile(settingsFile, "utf8")) as Partial<AppSettings>) };
+  } catch {
+    return defaultAppSettings;
+  }
+}
+
+export async function saveAppSettings(settings: AppSettings) {
+  await mkdir(dataDirectory, { recursive: true });
+  await writeFile(settingsFile, JSON.stringify(settings, null, 2), "utf8");
 }
 
 export async function listCollections(): Promise<CollectionSummary[]> {

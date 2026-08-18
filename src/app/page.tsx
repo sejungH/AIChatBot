@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type {
+  AppSettings,
   CollectionSummary,
   Message,
   PlayerCharacter,
@@ -29,6 +30,8 @@ function renderStoryText(content: string) {
 
 export default function Home() {
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
+  const [homeTab, setHomeTab] = useState<"worlds" | "settings">("worlds");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [activeCollection, setActiveCollection] =
     useState<CollectionSummary | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -38,7 +41,14 @@ export default function Home() {
 
   useEffect(() => {
     void loadCollections();
+    const savedTheme = window.localStorage.getItem("story-weaver-theme");
+    if (savedTheme === "dark" || savedTheme === "light") setTheme(savedTheme);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("story-weaver-theme", theme);
+  }, [theme]);
 
   async function loadCollections() {
     const response = await fetch("/api/collections");
@@ -101,11 +111,9 @@ export default function Home() {
             당신만의 세계와 인물을 만들고, 각자의 이야기를 시작하세요.
           </p>
         </div>
-        <button className="primary-button" onClick={() => setIsCreating(true)}>
-          캐릭터 생성
-        </button>
+        <div className="home-actions"><div className="home-tabs"><button className={homeTab === "worlds" ? "active" : ""} onClick={() => setHomeTab("worlds")}>세계관</button><button className={homeTab === "settings" ? "active" : ""} onClick={() => setHomeTab("settings")}>설정</button></div>{homeTab === "worlds" && <button className="primary-button" onClick={() => setIsCreating(true)}>캐릭터 생성</button>}</div>
       </header>
-      <section className="collection-grid">
+      {homeTab === "worlds" ? <section className="collection-grid">
         {isLoading ? (
           <p className="empty-state">세계관을 불러오는 중...</p>
         ) : collections.length === 0 ? (
@@ -132,7 +140,7 @@ export default function Home() {
             </button>
           ))
         )}
-      </section>
+      </section> : <SettingsPanel theme={theme} onThemeChange={setTheme} />}
       {isCreating && (
         <CreationModal
           onClose={() => setIsCreating(false)}
@@ -145,6 +153,15 @@ export default function Home() {
       )}
     </main>
   );
+}
+
+function SettingsPanel({ theme, onThemeChange }: { theme: "light" | "dark"; onThemeChange: (theme: "light" | "dark") => void }) {
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { void (async () => { const response = await fetch("/api/settings"); if (response.ok) setSettings(await response.json()); })(); }, []);
+  async function updateModel(geminiModel: string) { setIsSaving(true); setError(""); try { const response = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ geminiModel }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error); setSettings(result); } catch (reason) { setError(reason instanceof Error ? reason.message : "설정을 저장하지 못했습니다."); } finally { setIsSaving(false); } }
+  return <section className="settings-panel"><div className="settings-group"><p className="section-title">테마</p><p className="helper-copy">화면에 적용할 색상 모드를 선택하세요.</p><div className="segmented-control"><button className={theme === "light" ? "active" : ""} onClick={() => onThemeChange("light")}>라이트</button><button className={theme === "dark" ? "active" : ""} onClick={() => onThemeChange("dark")}>다크</button></div></div><div className="settings-group"><p className="section-title">Gemini 모델</p><p className="helper-copy">선택한 모델은 이후 생성되는 대화와 요약부터 사용됩니다.</p><label>생성 모델<select value={settings?.geminiModel ?? "gemini-3.5-flash"} disabled={!settings || isSaving} onChange={(event) => void updateModel(event.target.value)}><option value="gemini-3.5-flash">Gemini 3.5 Flash</option><option value="gemini-2.0-flash">Gemini 2.0 Flash</option><option value="gemini-1.5-flash">Gemini 1.5 Flash</option><option value="gemini-1.5-pro">Gemini 1.5 Pro</option></select></label>{error && <p className="form-error">{error}</p>}</div></section>;
 }
 
 function PlayerSetup({
@@ -441,6 +458,7 @@ function Conversation({
   const [isSending, setIsSending] = useState(false);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isChatChromeHidden, setIsChatChromeHidden] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const query = `collectionId=${selection.collection.id}&characterId=${selection.characterId}&playerCharacterId=${selection.playerCharacter.id}`;
 
@@ -530,7 +548,7 @@ function Conversation({
           </p>
         </section>
       </aside>
-      <section className="stage">
+      <section className={`stage ${isChatChromeHidden ? "chat-chrome-hidden" : ""}`}>
         <header>
           <div className="chat-title">
             {!isSidebarOpen && <button className="panel-icon-button" aria-label="설정 패널 열기" title="설정 패널 열기" onClick={() => setIsSidebarOpen(true)}>&#9776;</button>}
@@ -558,7 +576,7 @@ function Conversation({
           <div><dt>위치</dt><dd>{state.sceneStatus.location}</dd></div>
           <div className="scene-situation"><dt>상황</dt><dd>{state.sceneStatus.situation}</dd></div>
         </dl>
-        <div className="messages">
+        <div className="messages" onClick={() => setIsChatChromeHidden((isHidden) => !isHidden)}>
           <article className="message assistant opening-message">
             <p className="speaker">{state.settings.characterName}</p>
             <p>

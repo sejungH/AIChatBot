@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Story Weaver: Next.js 개발 서버",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "PATH=/usr/local/opt/node@22/bin:$PATH npm run dev -- --hostname 127.0.0.1 --port 3000",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

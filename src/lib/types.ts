@@ -21,6 +21,10 @@ export type SceneStatus = {
   situation: string;
 };
 
+export type AppSettings = {
+  geminiModel: string;
+};
+
 export type StoryState = {
   settings: StorySettings;
   messages: Message[];

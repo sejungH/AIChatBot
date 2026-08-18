@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getAppSettings } from "@/lib/story-store";
 import type { Message, PlayerCharacter, SceneStatus, StoryState } from "@/lib/types";
 
 const modelName = process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
@@ -10,8 +11,9 @@ function createModel(model: string) {
   return new GoogleGenerativeAI(apiKey).getGenerativeModel({ model });
 }
 
-function getFallbackModels() {
-  return [modelName, ...fallbackModelNames].filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
+async function getFallbackModels() {
+  const { geminiModel } = await getAppSettings();
+  return [geminiModel, modelName, ...fallbackModelNames].filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
 }
 
 function isModelNotFoundError(error: unknown) {
@@ -21,7 +23,7 @@ function isModelNotFoundError(error: unknown) {
 
 async function generateTextWithFallback(prompt: string) {
   let lastError: unknown;
-  for (const model of getFallbackModels()) {
+  for (const model of await getFallbackModels()) {
     try {
       const result = await createModel(model).generateContent(prompt);
       return result.response.text().trim();
