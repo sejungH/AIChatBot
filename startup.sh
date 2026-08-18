@@ -27,5 +27,5 @@ npm ci
 npm run build
 
 PORT="${PORT:-3000}"
-HOSTNAME="${HOSTNAME:-0.0.0.0}"
-exec npm run start -- --hostname "$HOSTNAME" --port "$PORT"
+HOST_IP="${HOST_IP:-0.0.0.0}"
+exec npm run start -- --hostname "$HOST_IP" --port "$PORT"
