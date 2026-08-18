@@ -17,6 +17,7 @@ type Selection = {
 };
 
 const emptyCharacter = (): DraftCharacter => ({ name: "", description: "" });
+const createClientMessageId = () => `client-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
 function renderStoryText(content: string) {
   const dialoguePattern = /("[^"\n]*"|“[^”\n]*”|「[^」\n]*」|『[^』\n]*』)/g;
@@ -478,7 +479,7 @@ function Conversation({
     const content = message.trim();
     const previousState = state;
     const optimisticMessage: Message = {
-      id: crypto.randomUUID(),
+      id: createClientMessageId(),
       role: "user",
       content,
       createdAt: new Date().toISOString(),
