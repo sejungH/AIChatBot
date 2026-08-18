@@ -59,4 +59,6 @@ export type StoryCollection = {
   createdAt: string;
 };
 
-export type CollectionSummary = Pick<StoryCollection, "id" | "title" | "world" | "openingSituation" | "characters" | "createdAt">;
+export type CollectionSummary = Pick<StoryCollection, "id" | "title" | "world" | "openingSituation" | "characters" | "createdAt"> & {
+  dialogueCount: number;
+};

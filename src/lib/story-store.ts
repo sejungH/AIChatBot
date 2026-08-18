@@ -92,7 +92,10 @@ export async function saveAppSettings(settings: AppSettings) {
 
 export async function listCollections(): Promise<CollectionSummary[]> {
   const collections = await getCollections();
-  return collections.map(({ id, title, world, openingSituation, characters, createdAt }) => ({ id, title, world, openingSituation, characters, createdAt }));
+  return collections.map(({ id, title, world, openingSituation, characters, createdAt, conversations }) => ({
+    id, title, world, openingSituation, characters, createdAt,
+    dialogueCount: Object.values(conversations).reduce((total, characterConversations) => total + Object.values(characterConversations).reduce((characterTotal, state) => characterTotal + state.messages.filter((message) => message.role === "user").length, 0), 0),
+  }));
 }
 
 export async function createCollection(title: string, world: string, openingSituation: string, characters: CharacterProfile[]) {

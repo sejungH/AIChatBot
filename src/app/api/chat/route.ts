@@ -24,15 +24,27 @@ export async function POST(request: Request) {
     const { collectionId, characterId, playerCharacterId } = getIds(request);
     console.info(`[chat:${requestId}] 요청 수신`, { collectionId, characterId, playerCharacterId });
     if (!collectionId || !characterId || !playerCharacterId) return NextResponse.json({ error: "대화 대상을 선택해 주세요." }, { status: 400 });
-    const body = (await request.json()) as { message?: string };
-    const message = body.message?.trim();
-    if (!message) return NextResponse.json({ error: "메시지를 입력해 주세요." }, { status: 400 });
+    const body = (await request.json()) as { message?: string; regenerateMessageId?: string };
 
     const conversation = await getConversation(collectionId, characterId, playerCharacterId);
     if (!conversation) return NextResponse.json({ error: "대화 대상을 찾을 수 없습니다." }, { status: 404 });
     const { state, collection } = conversation;
     const playerCharacter = collection.playerCharacters.find((item) => item.id === playerCharacterId);
     if (!playerCharacter) return NextResponse.json({ error: "플레이어 캐릭터를 찾을 수 없습니다." }, { status: 404 });
+    const regenerateIndex = body.regenerateMessageId ? state.messages.findIndex((item) => item.id === body.regenerateMessageId && item.role === "user") : -1;
+    const message = (regenerateIndex >= 0 ? state.messages[regenerateIndex].content : body.message)?.trim();
+    if (!message) return NextResponse.json({ error: "메시지를 입력해 주세요." }, { status: 400 });
+    if (regenerateIndex >= 0) {
+      const refreshSummary = regenerateIndex < state.lastSummarizedMessageCount;
+      state.messages = state.messages.slice(0, regenerateIndex);
+      if (refreshSummary) {
+        state.summary = "아직 이야기가 시작되지 않았습니다.";
+        state.lastSummarizedUserMessageCount = 0;
+        state.lastSummarizedMessageCount = 0;
+        state.summaryNeedsRefresh = true;
+      }
+      console.info(`[chat:${requestId}] 메시지 재생성`, { messageIndex: regenerateIndex });
+    }
     const userMessage: Message = { id: crypto.randomUUID(), role: "user", content: message, createdAt: new Date().toISOString() };
     state.messages.push(userMessage);
     const reply = await createRoleplayReply(state, message, playerCharacter);

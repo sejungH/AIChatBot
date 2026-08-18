@@ -133,7 +133,7 @@ export default function Home() {
             >
               <span className="world-panel-top">
                 <small>WORLD</small>
-                <span>{collection.characters.length}명의 인물</span>
+                <span>{collection.dialogueCount}회 대화 · {collection.characters.length}명의 인물</span>
               </span>
               <strong>{collection.title}</strong>
               <p>{collection.world}</p>
@@ -458,17 +458,25 @@ function Conversation({
   const [memory, setMemory] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [sendStatus, setSendStatus] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isChatChromeHidden, setIsChatChromeHidden] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const query = `collectionId=${selection.collection.id}&characterId=${selection.characterId}&playerCharacterId=${selection.playerCharacter.id}`;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state?.messages.length, isSending]);
+  useEffect(() => {
+    const textarea = composerTextareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [message]);
   function logDebug(message: string) {
     const time = new Date().toLocaleTimeString("ko-KR", { hour12: false });
     setDebugLog((entries) => [...entries.slice(-49), `[${time}] ${message}`]);
@@ -550,6 +558,22 @@ function Conversation({
     setMessage(messageToEdit.content);
     setSendStatus("메시지를 수정한 뒤 종이비행기 버튼으로 다시 보내세요.");
   }
+  async function regenerateMessage(messageToRegenerate: Message) {
+    if (isSending) return;
+    setIsSending(true);
+    setSendStatus("이 시점부터 이야기를 다시 생성하는 중...");
+    try {
+      const response = await fetch(`/api/chat?${query}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regenerateMessageId: messageToRegenerate.id }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "대화를 다시 생성하지 못했습니다.");
+      setState(result as StoryState);
+      setSendStatus("");
+    } catch (reason) {
+      const errorMessage = reason instanceof Error ? reason.message : "대화를 다시 생성하지 못했습니다.";
+      setSendStatus(errorMessage);
+      setIsDebugOpen(true);
+    } finally { setIsSending(false); }
+  }
 
   if (!state) return <main className="loading">대화를 불러오는 중...</main>;
   return (
@@ -567,19 +591,25 @@ function Conversation({
           &larr; 인물 목록
         </button>
         <p className="eyebrow">{selection.collection.title}</p>
-        <h1>{state.settings.characterName}</h1>
+        <div className="sidebar-tools"><button className="debug-button" onClick={() => setIsSummaryOpen(true)}>스토리 요약</button><button className="debug-button" onClick={() => setIsMemoryOpen(true)}>고정 기억</button><button className="debug-button" onClick={() => setIsDebugOpen(true)}>로그</button></div>
+        <hr className="sidebar-divider" />
+        <section>
+          <p className="section-title">총 대화</p>
+          <p className="world-copy">{state.messages.filter((item) => item.role === "user").length}회</p>
+        </section>
         <section>
           <p className="section-title">메인 캐릭터 설정</p>
+          <strong className="sidebar-character-name">{state.settings.characterName}</strong>
           <p className="world-copy">{state.settings.characterDescription}</p>
         </section>
         <section>
-          <p className="section-title">플레이어</p>
+          <p className="section-title">플레이어 설정</p>
           <p className="world-copy">
-            <strong>{selection.playerCharacter.name}</strong>
-            <br />
+            <strong className="sidebar-character-name">{selection.playerCharacter.name}</strong>
             {selection.playerCharacter.description}
           </p>
         </section>
+        {selection.collection.characters.length > 1 && <section><p className="section-title">서브 캐릭터 설정</p>{selection.collection.characters.slice(1).map((character) => <div className="sub-character" key={character.id}><strong>{character.name}</strong><p className="world-copy">{character.description}</p></div>)}</section>}
       </aside>
       <section className={`stage ${isChatChromeHidden ? "chat-chrome-hidden" : ""}`}>
         <header>
@@ -595,13 +625,6 @@ function Conversation({
               {state.messages.filter((item) => item.role === "user").length % 8}{" "}
               / 8 대화 후 요약
             </p>
-            <button
-              className="memory-button"
-              onClick={() => setIsMemoryOpen(true)}
-            >
-              고정 기억
-            </button>
-            <button className="debug-button" onClick={() => setIsDebugOpen(true)}>로그</button>
           </div>
         </header>
         <dl className="scene-status" aria-label="현재 상황">
@@ -631,7 +654,7 @@ function Conversation({
                 {item.role === "user"
                   ? selection.playerCharacter.name
                   : state.settings.characterName}
-              </p>{canEdit && <button className="edit-message-button" aria-label="직전 메시지 수정" title="직전 메시지 수정" onClick={(event) => { event.stopPropagation(); void editLastMessage(item); }}><i className="fa-solid fa-pen" aria-hidden="true" /></button>}</div>
+              </p>{item.role === "user" && <button className="edit-message-button" aria-label="이 시점부터 다시 생성" title="이 시점부터 다시 생성" onClick={(event) => { event.stopPropagation(); void regenerateMessage(item); }}><i className="fa-solid fa-arrows-rotate" aria-hidden="true" /></button>}{canEdit && <button className="edit-message-button" aria-label="직전 메시지 수정" title="직전 메시지 수정" onClick={(event) => { event.stopPropagation(); void editLastMessage(item); }}><i className="fa-solid fa-pen" aria-hidden="true" /></button>}</div>
               <p>{renderStoryText(item.content)}</p>
             </article>
             );
@@ -645,7 +668,8 @@ function Conversation({
           <div ref={endRef} />
         </div>
         <form className="composer" onSubmit={sendMessage}>
-          <div className="composer-input"><textarea
+            <div className="composer-input"><textarea
+              ref={composerTextareaRef}
               placeholder={`${selection.playerCharacter.name}의 말이나 행동을 적어 보세요... (/사건, /시간흐름)`}
               value={message}
               onChange={(event) => setMessage(event.target.value)}
@@ -663,9 +687,15 @@ function Conversation({
           onRemove={removeMemory}
         />
       )}
+      {isSummaryOpen && <SummaryDialog summary={state.summary} onClose={() => setIsSummaryOpen(false)} />}
       {isDebugOpen && <DebugDialog entries={debugLog} onClose={() => setIsDebugOpen(false)} onClear={() => setDebugLog([])} />}
     </main>
   );
+}
+
+function SummaryDialog({ summary, onClose }: { summary: string; onClose: () => void }) {
+  const hasSummary = summary && summary !== "아직 이야기가 시작되지 않았습니다.";
+  return <div className="modal-backdrop" role="presentation"><section className="summary-dialog" role="dialog" aria-modal="true" aria-label="스토리 요약"><header><div><p className="eyebrow">STORY ARCHIVE</p><h2>스토리 요약</h2></div><button className="icon-button" aria-label="창 닫기" onClick={onClose}>x</button></header><div className="summary-content">{hasSummary ? <p>{summary}</p> : <p className="empty-memory">아직 저장된 스토리 요약이 없습니다.</p>}</div></section></div>;
 }
 
 function DebugDialog({ entries, onClose, onClear }: { entries: string[]; onClose: () => void; onClear: () => void }) {
