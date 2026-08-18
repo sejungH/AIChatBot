@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
-import type { AppSettings, CharacterProfile, CollectionSummary, PlayerCharacter, SceneStatus, StoredConversation, StoryCollection, StoryState } from "@/lib/types";
+import type { AppSettings, CharacterProfile, CollectionSummary, PlayerCharacter, SceneStatus, StoredConversation, StoryCollection, StoryState, StorySummary } from "@/lib/types";
 
 const dataDirectory = path.join(process.cwd(), "data");
 const dataFile = path.join(dataDirectory, "story-collections.json");
@@ -15,14 +15,27 @@ const initialSceneStatus: SceneStatus = {
 };
 
 function hydrateConversation(character: CharacterProfile, world: string, openingSituation: string, stored?: StoredConversation): StoryState {
+  const rawSummary = (stored as StoredConversation & { summary?: unknown } | undefined)?.summary;
+  const parseLegacySummary = (text: string): Omit<StorySummary, "dialogueCount">[] => text.split(/\n\s*\*\s+/).map((part) => part.trim()).filter((part) => part && !part.startsWith("다음은") && !part.startsWith("이전 요약")).map((part) => ({
+    location: /장소/.test(part) ? part : "",
+    relationship: /관계|갈등/.test(part) ? part : "",
+    event: /사건|시간 경과|시간 흐름/.test(part) ? part : "",
+    other: /소지품|약속|미해결|상태|인물|새로운 사실|향후/.test(part) ? part : "",
+  }));
+  const summary: StorySummary[] = Array.isArray(rawSummary) ? rawSummary.flatMap((item, index) => {
+    const legacy = item as Partial<StorySummary> & { 장소?: string; 관계?: string; 사건?: string; 기타?: string };
+    const hasLegacyKeys = legacy.장소 !== undefined || legacy.관계 !== undefined || legacy.사건 !== undefined || legacy.기타 !== undefined;
+    return hasLegacyKeys ? parseLegacySummary([legacy.장소, legacy.관계, legacy.사건, legacy.기타].filter(Boolean).join("\n* ")).map((summaryItem) => ({ ...summaryItem, dialogueCount: (index + 1) * 8 })) : [{ dialogueCount: typeof legacy.dialogueCount === "number" ? legacy.dialogueCount : (index + 1) * 8, location: legacy.location ?? "", relationship: legacy.relationship ?? "", event: legacy.event ?? "", other: legacy.other ?? "" }];
+  }) : typeof rawSummary === "string" && rawSummary && rawSummary !== "아직 이야기가 시작되지 않았습니다." ? parseLegacySummary(rawSummary).map((summaryItem, index) => ({ ...summaryItem, dialogueCount: (index + 1) * 8 })) : [];
   return {
     settings: { characterName: character.name, characterDescription: character.description, world, openingSituation },
     messages: stored?.messages ?? [],
-    summary: stored?.summary ?? "아직 이야기가 시작되지 않았습니다.",
+    summary,
     pinnedMemories: stored?.pinnedMemories ?? [],
     lastSummarizedUserMessageCount: stored?.lastSummarizedUserMessageCount ?? 0,
     lastSummarizedMessageCount: stored?.lastSummarizedMessageCount ?? 0,
     summaryNeedsRefresh: stored?.summaryNeedsRefresh ?? false,
+    summaryRefreshFromDialogueCount: stored?.summaryRefreshFromDialogueCount ?? null,
     sceneStatus: stored?.sceneStatus ?? initialSceneStatus,
   };
 }
@@ -37,7 +50,7 @@ function isConversation(value: unknown): value is StoredConversation {
 }
 
 function hasProgress(state: StoredConversation) {
-  return state.messages.length > 0 || state.pinnedMemories.length > 0 || state.summary !== "아직 이야기가 시작되지 않았습니다.";
+  return state.messages.length > 0 || state.pinnedMemories.length > 0 || state.summary.length > 0;
 }
 
 function normalizeConversations(value: unknown, playerCharacters: PlayerCharacter[]): StoryCollection["conversations"] {

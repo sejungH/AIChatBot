@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getAppSettings } from "@/lib/story-store";
-import type { Message, PlayerCharacter, SceneStatus, StoryState } from "@/lib/types";
+import type { Message, PlayerCharacter, SceneStatus, StoryState, StorySummary } from "@/lib/types";
 
 const modelName = process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
 const fallbackModelNames = ["gemini-3.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
@@ -85,7 +85,7 @@ export async function createRoleplayReply(state: StoryState, userMessage: string
 ${replaceUserTemplate(state.settings.openingSituation, playerCharacter)}
 
 이전 이야기 요약:
-${state.summary}
+${state.summary.length ? JSON.stringify(state.summary) : "- 아직 저장된 요약 없음"}
 
 반드시 기억해야 할 사실:
 ${state.pinnedMemories.length ? state.pinnedMemories.map((memory) => `- ${memory}`).join("\n") : "- 없음"}
@@ -114,11 +114,44 @@ ${conversation(recentMessages, playerCharacter) || "- 아직 없음"}
   return parseRoleplayResponse(await generateTextWithFallback(prompt), state.sceneStatus);
 }
 
-export async function summarizeStory(messages: Message[], playerCharacter: PlayerCharacter) {
-  const prompt = `다음은 진행 중인 한국어 롤플레잉의 새 구간입니다. 이전 요약을 바꾸거나 반복하지 말고, 이 구간에서 새롭게 확정된 사실만 간결하게 요약하세요.
-관계 변화, 사건, 장소, 소지품, 약속, 미해결 갈등을 빠뜨리지 마세요. 8개 이내의 불릿으로 작성하세요.
+function parseSummary(response: string, dialogueCount: number): StorySummary {
+  const json = response.replace(/^```json\s*|\s*```$/g, "").trim();
+  try {
+    const parsed = JSON.parse(json) as Partial<StorySummary>;
+    return { dialogueCount, location: parsed.location ?? "", relationship: parsed.relationship ?? "", event: parsed.event ?? "", other: parsed.other ?? "" };
+  } catch {
+    return { dialogueCount, location: "", relationship: "", event: "", other: response.trim() };
+  }
+}
+
+export async function summarizeStory(messages: Message[], playerCharacter: PlayerCharacter, dialogueCount: number) {
+  const prompt = `다음은 진행 중인 한국어 롤플레잉의 새 구간입니다. 이 구간에서 새롭게 확정된 사실만 요약하세요.
+장소, 관계 변화, 사건, 소지품·약속·미해결 갈등 등 기타 중요 정보를 구분해 작성하세요.
 
 새 대화 구간:
-${conversation(messages, playerCharacter)}`;
-  return generateTextWithFallback(prompt);
+${conversation(messages, playerCharacter)}
+
+반드시 아래 JSON 객체 하나만 반환하세요. markdown 코드블록을 사용하지 마세요.
+{"dialogueCount":${dialogueCount},"location":"현재 장소와 이동","relationship":"인물 관계 변화","event":"새로 발생한 사건","other":"소지품, 약속, 미해결 갈등 등"}`;
+  return parseSummary(await generateTextWithFallback(prompt), dialogueCount);
+}
+
+export async function summarizeEntireStory(messages: Message[], playerCharacter: PlayerCharacter) {
+  const prompt = `다음 전체 대화를 한국어 롤플레잉의 연속성 보존용 요약으로 정리하세요. 시간 순서와 핵심 사실을 유지하고, 중복을 줄이세요.
+각 요약 항목을 장소, 관계, 사건, 기타로 나누어 여러 객체의 JSON 배열로 반환하세요.
+각 객체의 dialogueCount에는 해당 요약이 다루는 마지막 사용자 대화의 누적 번호를 숫자로 기록하세요.
+
+전체 대화:
+${conversation(messages, playerCharacter)}
+
+반드시 아래 형식의 JSON 배열만 반환하세요.
+[{"dialogueCount":8,"location":"...","relationship":"...","event":"...","other":"..."}]`;
+  const response = await generateTextWithFallback(prompt);
+  const json = response.replace(/^```json\s*|\s*```$/g, "").trim();
+  try {
+    const parsed = JSON.parse(json) as Partial<StorySummary>[];
+    return parsed.map((item) => ({ dialogueCount: typeof item.dialogueCount === "number" ? item.dialogueCount : 0, location: item.location ?? "", relationship: item.relationship ?? "", event: item.event ?? "", other: item.other ?? "" }));
+  } catch {
+    return [parseSummary(response, messages.filter((message) => message.role === "user").length)];
+  }
 }

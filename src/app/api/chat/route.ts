@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createRoleplayReply, summarizeStory } from "@/lib/gemini";
+import { createRoleplayReply, summarizeEntireStory, summarizeStory } from "@/lib/gemini";
 import { getConversation, saveConversation } from "@/lib/story-store";
 import type { Message } from "@/lib/types";
 
@@ -38,10 +38,11 @@ export async function POST(request: Request) {
       const refreshSummary = regenerateIndex < state.lastSummarizedMessageCount;
       state.messages = state.messages.slice(0, regenerateIndex);
       if (refreshSummary) {
-        state.summary = "아직 이야기가 시작되지 않았습니다.";
+        state.summary = [];
         state.lastSummarizedUserMessageCount = 0;
         state.lastSummarizedMessageCount = 0;
         state.summaryNeedsRefresh = true;
+        state.summaryRefreshFromDialogueCount = state.messages.slice(0, regenerateIndex).filter((item) => item.role === "user").length + 1;
       }
       console.info(`[chat:${requestId}] 메시지 재생성`, { messageIndex: regenerateIndex });
     }
@@ -53,13 +54,17 @@ export async function POST(request: Request) {
 
     const userMessageCount = state.messages.filter((item) => item.role === "user").length;
     if (state.summaryNeedsRefresh) {
-      state.summary = await summarizeStory(state.messages, playerCharacter);
+      const preservedSummary = state.summary;
+      const regeneratedSummary = await summarizeEntireStory(state.messages, playerCharacter);
+      const refreshFrom = state.summaryRefreshFromDialogueCount ?? 0;
+      state.summary = [...preservedSummary, ...regeneratedSummary.filter((summary) => summary.dialogueCount >= refreshFrom)];
       state.lastSummarizedUserMessageCount = userMessageCount;
       state.lastSummarizedMessageCount = state.messages.length;
       state.summaryNeedsRefresh = false;
+      state.summaryRefreshFromDialogueCount = null;
     } else if (userMessageCount - state.lastSummarizedUserMessageCount >= 8) {
-      const newSummary = await summarizeStory(state.messages.slice(state.lastSummarizedMessageCount), playerCharacter);
-      state.summary = state.summary === "아직 이야기가 시작되지 않았습니다." ? newSummary : `${state.summary}\n\n${newSummary}`;
+      const newSummary = await summarizeStory(state.messages.slice(state.lastSummarizedMessageCount), playerCharacter, userMessageCount);
+      state.summary.push(newSummary);
       state.lastSummarizedUserMessageCount = userMessageCount;
       state.lastSummarizedMessageCount = state.messages.length;
     }
@@ -83,13 +88,15 @@ export async function DELETE(request: Request) {
   const messageIndex = state.messages.findIndex((message) => message.id === messageId && message.role === "user");
   const isLastUserMessage = messageIndex !== -1 && !state.messages.slice(messageIndex + 1).some((message) => message.role === "user");
   if (!isLastUserMessage) return NextResponse.json({ error: "가장 최근에 보낸 메시지만 수정할 수 있습니다." }, { status: 400 });
+  const targetDialogueCount = state.messages.slice(0, messageIndex + 1).filter((message) => message.role === "user").length;
   const requiresSummaryRefresh = messageIndex < state.lastSummarizedMessageCount;
   state.messages = state.messages.slice(0, messageIndex);
   if (requiresSummaryRefresh) {
-    state.summary = "아직 이야기가 시작되지 않았습니다.";
+    state.summary = state.summary.filter((summary) => summary.dialogueCount < targetDialogueCount);
     state.lastSummarizedUserMessageCount = 0;
     state.lastSummarizedMessageCount = 0;
     state.summaryNeedsRefresh = true;
+    state.summaryRefreshFromDialogueCount = targetDialogueCount;
   }
   await saveConversation(collectionId, characterId, playerCharacterId, state);
   return NextResponse.json(state);

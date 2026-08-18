@@ -7,6 +7,7 @@ import type {
   Message,
   PlayerCharacter,
   StoryState,
+  StorySummary,
 } from "@/lib/types";
 
 type DraftCharacter = { name: string; description: string };
@@ -693,9 +694,8 @@ function Conversation({
   );
 }
 
-function SummaryDialog({ summary, onClose }: { summary: string; onClose: () => void }) {
-  const hasSummary = summary && summary !== "아직 이야기가 시작되지 않았습니다.";
-  return <div className="modal-backdrop" role="presentation"><section className="summary-dialog" role="dialog" aria-modal="true" aria-label="스토리 요약"><header><div><p className="eyebrow">STORY ARCHIVE</p><h2>스토리 요약</h2></div><button className="icon-button" aria-label="창 닫기" onClick={onClose}>x</button></header><div className="summary-content">{hasSummary ? <p>{summary}</p> : <p className="empty-memory">아직 저장된 스토리 요약이 없습니다.</p>}</div></section></div>;
+function SummaryDialog({ summary, onClose }: { summary: StorySummary[]; onClose: () => void }) {
+  return <div className="modal-backdrop" role="presentation"><section className="summary-dialog" role="dialog" aria-modal="true" aria-label="스토리 요약"><header><div><p className="eyebrow">STORY ARCHIVE</p><h2>스토리 요약</h2></div><button className="icon-button" aria-label="창 닫기" onClick={onClose}>x</button></header><div className="summary-content">{summary.length ? summary.map((item, index) => <article className="summary-card" key={index}><span className="summary-tag">{item.dialogueCount}번째 대화 후</span><p><strong>장소</strong>{item.location}</p><p><strong>관계</strong>{item.relationship}</p><p><strong>사건</strong>{item.event}</p><p><strong>기타</strong>{item.other}</p></article>) : <p className="empty-memory">아직 저장된 스토리 요약이 없습니다.</p>}</div></section></div>;
 }
 
 function DebugDialog({ entries, onClose, onClear }: { entries: string[]; onClose: () => void; onClear: () => void }) {
