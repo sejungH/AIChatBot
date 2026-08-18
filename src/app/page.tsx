@@ -457,6 +457,8 @@ function Conversation({
   const [memory, setMemory] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+  const [isDebugOpen, setIsDebugOpen] = useState(false);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isChatChromeHidden, setIsChatChromeHidden] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -465,6 +467,10 @@ function Conversation({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state?.messages.length, isSending]);
+  function logDebug(message: string) {
+    const time = new Date().toLocaleTimeString("ko-KR", { hour12: false });
+    setDebugLog((entries) => [...entries.slice(-49), `[${time}] ${message}`]);
+  }
   async function sendMessage(event: FormEvent) {
     event.preventDefault();
     if (!message.trim() || !state || isSending) return;
@@ -479,19 +485,28 @@ function Conversation({
     setState({ ...state, messages: [...state.messages, optimisticMessage] });
     setMessage("");
     setIsSending(true);
+    logDebug(`전송 시작: ${content.slice(0, 80)}`);
     try {
       const response = await fetch(`/api/chat?${query}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: content }),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
-      setState(result);
+      const rawResult = await response.text();
+      let result: StoryState | { error?: string; requestId?: string };
+      try { result = JSON.parse(rawResult) as StoryState | { error?: string; requestId?: string }; } catch { throw new Error(`서버가 JSON이 아닌 응답을 반환했습니다: ${rawResult.slice(0, 200)}`); }
+      if (!response.ok) {
+        const errorResult = result as { error?: string; requestId?: string };
+        throw new Error(`HTTP ${response.status}: ${errorResult.error ?? "알 수 없는 오류"}${errorResult.requestId ? ` (요청 ID: ${errorResult.requestId})` : ""}`);
+      }
+      logDebug(`응답 수신: HTTP ${response.status}`);
+      setState(result as StoryState);
     } catch (reason) {
       setState(previousState);
       setMessage(content);
-      alert(reason instanceof Error ? reason.message : "오류가 발생했습니다.");
+      const errorMessage = reason instanceof Error ? reason.message : "오류가 발생했습니다.";
+      logDebug(`오류: ${errorMessage}`);
+      setIsDebugOpen(true);
     } finally {
       setIsSending(false);
     }
@@ -568,6 +583,7 @@ function Conversation({
             >
               고정 기억
             </button>
+            <button className="debug-button" onClick={() => setIsDebugOpen(true)}>로그</button>
           </div>
         </header>
         <dl className="scene-status" aria-label="현재 상황">
@@ -618,8 +634,8 @@ function Conversation({
               }
             }}
           />
-          <button disabled={isSending}>
-            보내기
+          <button className="send-button" disabled={isSending} aria-label="메시지 보내기" title="메시지 보내기">
+            <i className="fa-solid fa-paper-plane" aria-hidden="true" />
           </button>
         </form>
       </section>
@@ -633,8 +649,13 @@ function Conversation({
           onRemove={removeMemory}
         />
       )}
+      {isDebugOpen && <DebugDialog entries={debugLog} onClose={() => setIsDebugOpen(false)} onClear={() => setDebugLog([])} />}
     </main>
   );
+}
+
+function DebugDialog({ entries, onClose, onClear }: { entries: string[]; onClose: () => void; onClear: () => void }) {
+  return <div className="modal-backdrop" role="presentation"><section className="debug-dialog" role="dialog" aria-modal="true" aria-label="디버그 로그"><header><div><p className="eyebrow">CHAT DEBUG</p><h2>전송 로그</h2></div><button className="icon-button" aria-label="창 닫기" onClick={onClose}>x</button></header><div className="debug-log">{entries.length ? entries.map((entry, index) => <p key={`${entry}-${index}`}>{entry}</p>) : <p>아직 기록된 요청이 없습니다.</p>}</div><footer><button className="secondary-button" onClick={onClear}>로그 비우기</button></footer></section></div>;
 }
 
 function MemoryDialog({

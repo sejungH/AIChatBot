@@ -19,8 +19,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   try {
     const { collectionId, characterId, playerCharacterId } = getIds(request);
+    console.info(`[chat:${requestId}] 요청 수신`, { collectionId, characterId, playerCharacterId });
     if (!collectionId || !characterId || !playerCharacterId) return NextResponse.json({ error: "대화 대상을 선택해 주세요." }, { status: 400 });
     const body = (await request.json()) as { message?: string };
     const message = body.message?.trim();
@@ -45,9 +47,11 @@ export async function POST(request: Request) {
       state.lastSummarizedMessageCount = state.messages.length;
     }
     await saveConversation(collectionId, characterId, playerCharacterId, state);
+    console.info(`[chat:${requestId}] 응답 저장 완료`, { messageCount: state.messages.length });
     return NextResponse.json(state);
   } catch (error) {
     const message = error instanceof Error ? error.message : "대화를 생성하지 못했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error(`[chat:${requestId}] 요청 실패`, error);
+    return NextResponse.json({ error: message, requestId }, { status: 500 });
   }
 }
