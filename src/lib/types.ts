@@ -25,14 +25,23 @@ export type AppSettings = {
   geminiModel: string;
 };
 
+export type StorySummary = {
+  dialogueCount: number;
+  location: string;
+  relationship: string;
+  event: string;
+  other: string;
+};
+
 export type StoryState = {
   settings: StorySettings;
   messages: Message[];
-  summary: string;
+  summary: StorySummary[];
   pinnedMemories: string[];
   lastSummarizedUserMessageCount: number;
   lastSummarizedMessageCount: number;
   summaryNeedsRefresh: boolean;
+  summaryRefreshFromDialogueCount: number | null;
   sceneStatus: SceneStatus;
 };
 
