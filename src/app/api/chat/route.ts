@@ -40,7 +40,12 @@ export async function POST(request: Request) {
     state.messages.push({ id: crypto.randomUUID(), role: "assistant", content: reply.content, createdAt: new Date().toISOString() });
 
     const userMessageCount = state.messages.filter((item) => item.role === "user").length;
-    if (userMessageCount - state.lastSummarizedUserMessageCount >= 8) {
+    if (state.summaryNeedsRefresh) {
+      state.summary = await summarizeStory(state.messages, playerCharacter);
+      state.lastSummarizedUserMessageCount = userMessageCount;
+      state.lastSummarizedMessageCount = state.messages.length;
+      state.summaryNeedsRefresh = false;
+    } else if (userMessageCount - state.lastSummarizedUserMessageCount >= 8) {
       const newSummary = await summarizeStory(state.messages.slice(state.lastSummarizedMessageCount), playerCharacter);
       state.summary = state.summary === "아직 이야기가 시작되지 않았습니다." ? newSummary : `${state.summary}\n\n${newSummary}`;
       state.lastSummarizedUserMessageCount = userMessageCount;
@@ -54,4 +59,26 @@ export async function POST(request: Request) {
     console.error(`[chat:${requestId}] 요청 실패`, error);
     return NextResponse.json({ error: message, requestId }, { status: 500 });
   }
+}
+
+export async function DELETE(request: Request) {
+  const { collectionId, characterId, playerCharacterId } = getIds(request);
+  const { messageId } = (await request.json()) as { messageId?: string };
+  if (!collectionId || !characterId || !playerCharacterId || !messageId) return NextResponse.json({ error: "수정할 메시지를 찾을 수 없습니다." }, { status: 400 });
+  const conversation = await getConversation(collectionId, characterId, playerCharacterId);
+  if (!conversation) return NextResponse.json({ error: "대화 대상을 찾을 수 없습니다." }, { status: 404 });
+  const { state } = conversation;
+  const messageIndex = state.messages.findIndex((message) => message.id === messageId && message.role === "user");
+  const isLastUserMessage = messageIndex !== -1 && !state.messages.slice(messageIndex + 1).some((message) => message.role === "user");
+  if (!isLastUserMessage) return NextResponse.json({ error: "가장 최근에 보낸 메시지만 수정할 수 있습니다." }, { status: 400 });
+  const requiresSummaryRefresh = messageIndex < state.lastSummarizedMessageCount;
+  state.messages = state.messages.slice(0, messageIndex);
+  if (requiresSummaryRefresh) {
+    state.summary = "아직 이야기가 시작되지 않았습니다.";
+    state.lastSummarizedUserMessageCount = 0;
+    state.lastSummarizedMessageCount = 0;
+    state.summaryNeedsRefresh = true;
+  }
+  await saveConversation(collectionId, characterId, playerCharacterId, state);
+  return NextResponse.json(state);
 }

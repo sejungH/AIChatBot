@@ -22,6 +22,7 @@ function hydrateConversation(character: CharacterProfile, world: string, opening
     pinnedMemories: stored?.pinnedMemories ?? [],
     lastSummarizedUserMessageCount: stored?.lastSummarizedUserMessageCount ?? 0,
     lastSummarizedMessageCount: stored?.lastSummarizedMessageCount ?? 0,
+    summaryNeedsRefresh: stored?.summaryNeedsRefresh ?? false,
     sceneStatus: stored?.sceneStatus ?? initialSceneStatus,
   };
 }

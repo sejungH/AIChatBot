@@ -32,6 +32,7 @@ export type StoryState = {
   pinnedMemories: string[];
   lastSummarizedUserMessageCount: number;
   lastSummarizedMessageCount: number;
+  summaryNeedsRefresh: boolean;
   sceneStatus: SceneStatus;
 };
 
