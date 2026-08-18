@@ -36,6 +36,7 @@
 .chat-title { display: flex; align-items: center; gap: 12px; }
 .chat-chrome-hidden > header { display: none; }
 .composer .send-button { display: grid; width: 52px; height: 52px; align-self: center; place-items: center; padding: 0; }.send-button i { font-size: 18px; }
+.composer-input { min-width: 0; }.composer-input textarea { display: block; }.send-status { margin: 6px 0 0; color: var(--coral); font-size: 12px; line-height: 1.4; }
 
 @media (min-width: 781px) {
 	.shell { height: 100dvh; min-height: 0; overflow: hidden; transition: grid-template-columns .2s ease; }

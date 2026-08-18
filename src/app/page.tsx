@@ -459,6 +459,7 @@ function Conversation({
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [sendStatus, setSendStatus] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isChatChromeHidden, setIsChatChromeHidden] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -485,12 +486,16 @@ function Conversation({
     setState({ ...state, messages: [...state.messages, optimisticMessage] });
     setMessage("");
     setIsSending(true);
+    setSendStatus("AI 응답을 생성하고 있습니다...");
     logDebug(`전송 시작: ${content.slice(0, 80)}`);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 90_000);
     try {
       const response = await fetch(`/api/chat?${query}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: content }),
+        signal: controller.signal,
       });
       const rawResult = await response.text();
       let result: StoryState | { error?: string; requestId?: string };
@@ -501,13 +506,16 @@ function Conversation({
       }
       logDebug(`응답 수신: HTTP ${response.status}`);
       setState(result as StoryState);
+      setSendStatus("");
     } catch (reason) {
       setState(previousState);
       setMessage(content);
-      const errorMessage = reason instanceof Error ? reason.message : "오류가 발생했습니다.";
+      const errorMessage = reason instanceof DOMException && reason.name === "AbortError" ? "90초 동안 응답이 없어 요청을 중단했습니다. 서버 로그에서 Gemini API 연결을 확인하세요." : reason instanceof Error ? reason.message : "오류가 발생했습니다.";
       logDebug(`오류: ${errorMessage}`);
+      setSendStatus(errorMessage);
       setIsDebugOpen(true);
     } finally {
+      window.clearTimeout(timeout);
       setIsSending(false);
     }
   }
@@ -623,20 +631,18 @@ function Conversation({
           <div ref={endRef} />
         </div>
         <form className="composer" onSubmit={sendMessage}>
-          <textarea
-            placeholder={`${selection.playerCharacter.name}의 말이나 행동을 적어 보세요... (/사건, /시간흐름)`}
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-          />
-          <button className="send-button" disabled={isSending} aria-label="메시지 보내기" title="메시지 보내기">
-            <i className="fa-solid fa-paper-plane" aria-hidden="true" />
-          </button>
+          <div className="composer-input"><textarea
+              placeholder={`${selection.playerCharacter.name}의 말이나 행동을 적어 보세요... (/사건, /시간흐름)`}
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />{sendStatus && <p className="send-status" role="status">{sendStatus}</p>}</div>
+          <button className="send-button" disabled={isSending} aria-label="메시지 보내기" title="메시지 보내기"><i className="fa-solid fa-paper-plane" aria-hidden="true" /></button>
         </form>
       </section>
       {isMemoryOpen && (
