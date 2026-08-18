@@ -23,6 +23,18 @@ if [[ ! -f .env.local ]]; then
   exit 1
 fi
 
+if ! grep -qE '^GEMINI_API_KEY=.+$' .env.local || grep -qE '^GEMINI_API_KEY=(your_gemini_api_key)?$' .env.local; then
+  echo ".env.local의 GEMINI_API_KEY가 비어 있거나 예시 값입니다." >&2
+  exit 1
+fi
+
+mkdir -p data
+if ! touch data/.startup-write-check && rm -f data/.startup-write-check; then
+  echo "data/ 디렉터리에 쓰기 권한이 없습니다. 서버 실행 계정에 권한을 부여하세요." >&2
+  exit 1
+fi
+
+echo "Story Weaver 시작 준비 완료: Node ${node_version}, data/ 쓰기 가능, Gemini 키 감지"
 npm ci
 npm run build
 
