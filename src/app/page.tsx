@@ -163,7 +163,7 @@ function SettingsPanel({ theme, onThemeChange }: { theme: "light" | "dark"; onTh
   const [error, setError] = useState("");
   useEffect(() => { void (async () => { const response = await fetch("/api/settings"); if (response.ok) setSettings(await response.json()); })(); }, []);
   async function updateModel(geminiModel: string) { setIsSaving(true); setError(""); try { const response = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ geminiModel }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error); setSettings(result); } catch (reason) { setError(reason instanceof Error ? reason.message : "설정을 저장하지 못했습니다."); } finally { setIsSaving(false); } }
-  return <section className="settings-panel"><div className="settings-group"><p className="section-title">테마</p><p className="helper-copy">화면에 적용할 색상 모드를 선택하세요.</p><div className="segmented-control"><button className={theme === "light" ? "active" : ""} onClick={() => onThemeChange("light")}>라이트</button><button className={theme === "dark" ? "active" : ""} onClick={() => onThemeChange("dark")}>다크</button></div></div><div className="settings-group"><p className="section-title">Gemini 모델</p><p className="helper-copy">선택한 모델은 이후 생성되는 대화와 요약부터 사용됩니다.</p><label>생성 모델<select value={settings?.geminiModel ?? "gemini-3.5-flash"} disabled={!settings || isSaving} onChange={(event) => void updateModel(event.target.value)}><option value="gemini-3.5-flash">Gemini 3.5 Flash</option><option value="gemini-2.0-flash">Gemini 2.0 Flash</option><option value="gemini-1.5-flash">Gemini 1.5 Flash</option><option value="gemini-1.5-pro">Gemini 1.5 Pro</option></select></label>{error && <p className="form-error">{error}</p>}</div></section>;
+  return <section className="settings-panel"><div className="settings-group"><p className="section-title">테마</p><p className="helper-copy">화면에 적용할 색상 모드를 선택하세요.</p><div className="segmented-control"><button className={theme === "light" ? "active" : ""} onClick={() => onThemeChange("light")}>라이트</button><button className={theme === "dark" ? "active" : ""} onClick={() => onThemeChange("dark")}>다크</button></div></div><div className="settings-group"><p className="section-title">Gemini 모델</p><p className="helper-copy">선택한 모델은 이후 생성되는 대화와 요약부터 사용됩니다.</p><label>생성 모델<select value={settings?.geminiModel ?? "gemini-3.5-flash"} disabled={!settings || isSaving} onChange={(event) => void updateModel(event.target.value)}><option value="gemini-3.5-flash">Gemini 3.5 Flash</option><option value="gemini-2.5-flash">Gemini 2.5 Flash</option><option value="gemini-2.0-flash">Gemini 2.0 Flash</option><option value="gemini-1.5-flash">Gemini 1.5 Flash</option><option value="gemini-1.5-pro">Gemini 1.5 Pro</option></select></label>{error && <p className="form-error">{error}</p>}</div></section>;
 }
 
 function PlayerSetup({
@@ -671,7 +671,7 @@ function Conversation({
         <form className="composer" onSubmit={sendMessage}>
             <div className="composer-input"><textarea
               ref={composerTextareaRef}
-              placeholder={`${selection.playerCharacter.name}의 말이나 행동을 적어 보세요... (/사건, /시간흐름)`}
+              placeholder={`${selection.playerCharacter.name}의 말이나 행동을 적어 보세요... (/진행, /사건, /시간흐름)`}
               value={message}
               onChange={(event) => setMessage(event.target.value)}
             />{sendStatus && <p className="send-status" role="status">{sendStatus}</p>}</div>

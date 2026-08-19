@@ -3,7 +3,7 @@ import { getAppSettings } from "@/lib/story-store";
 import type { Message, PlayerCharacter, SceneStatus, StoryState, StorySummary } from "@/lib/types";
 
 const modelName = process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
-const fallbackModelNames = ["gemini-3.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+const fallbackModelNames = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 
 function createModel(model: string) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -72,7 +72,8 @@ function parseRoleplayResponse(response: string, fallbackSceneStatus: SceneStatu
 
 export async function createRoleplayReply(state: StoryState, userMessage: string, playerCharacter: PlayerCharacter) {
   const recentMessages = state.messages.slice(state.lastSummarizedMessageCount);
-  const command = userMessage === "/사건" ? "사건 발생" : userMessage === "/시간흐름" ? "시간 흐름" : "일반 대화";
+  const command = userMessage === "/사건" ? "사건 발생" : userMessage === "/시간흐름" ? "시간 흐름" : userMessage === "/진행" ? "현재 장면 자연스럽게 진행" : "일반 대화";
+  const playerInput = userMessage === "/진행" ? "플레이어가 현재 장면의 흐름을 자연스럽게 이어가 달라고 요청함" : userMessage;
   const prompt = `당신은 텍스트 롤플레잉의 서술자이자 아래 캐릭터입니다. 한국어로만 답하세요.
 
 캐릭터 이름: ${state.settings.characterName}
@@ -96,7 +97,7 @@ ${JSON.stringify(state.sceneStatus)}
 마지막 요약 이후 대화:
 ${conversation(recentMessages, playerCharacter) || "- 아직 없음"}
 
-플레이어(${playerCharacter.name})의 새 행동/대사: ${userMessage}
+플레이어(${playerCharacter.name})의 새 행동/대사: ${playerInput}
 요청 종류: ${command}
 
 규칙:
@@ -106,6 +107,8 @@ ${conversation(recentMessages, playerCharacter) || "- 아직 없음"}
 - 첫 응답에서는 대화 시작 장면의 장소, 상황, 긴장감을 자연스럽게 이어받는다.
 - 요청 종류가 '사건 발생'이면 현재 상황과 세계관에 맞는 새 사건을 즉시 일으켜 긴장감 또는 선택지를 만든다.
 - 요청 종류가 '시간 흐름'이면 현재 상황에 적합한 시간(몇 분에서 몇 년)을 스스로 결정해 시간을 진행하고 그 결과를 묘사한다.
+- 요청 종류가 '현재 장면 자연스럽게 진행'이면 이전 이야기와 현재 장면 상태를 바탕으로 다음에 일어날 법한 작은 변화나 캐릭터의 행동을 자연스럽게 묘사한다. 갑작스러운 대형 사건이나 긴 시간 도약은 만들지 않는다.
+- '현재 장면 자연스럽게 진행' 요청에서는 플레이어의 행동, 대사, 감정을 대신 만들어내지 않는다.
 - 메타 설명, 규칙 언급, 'AI'라는 표현을 사용하지 않는다.
 - content에는 2~5개의 짧은 문단으로 응답한다.
 

@@ -64,3 +64,7 @@
 	.messages { min-height: 0; }
 	.scene-status div { padding-left: 20px; padding-right: 20px; }
 }
+
+	@media (max-width: 780px) {
+		input, textarea, select { font-size: 16px !important; }
+	}
